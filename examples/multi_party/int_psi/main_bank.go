@@ -9,42 +9,58 @@ import (
 	"github.com/tuneinsight/lattigo/v5/he/heint"
 )
 
-func main() {
+func main_bank() {
+	l := log.New(os.Stderr, "", 0)
 
-	//COME PRENDE LE COSE CHE PASSO DALL'ALTRO FOGLIO?
 	//set parameters
-	params
-	pk
-	sk
+	params, pk, sk, tsk := setParamAndKeyBank()
 
 	//get inputs
-	input := setInput(params, a)
+	input := setInputBank(params, a)
 
 	//encrypt input
 	encoder := heint.NewEncoder(params)
-	encInputs := encPhase(params, pk, encoder, input)
+	encInputs := encPhaseBank(params, pk, encoder, input)
 
 	//give it back to the other file
+	sendInputBank(encInputs)
 
 	//obtain back the result of evaluation
+	encOut = getEncOutBank()
 
 	//decrypt
-	// Decrypt the result with the target secret key
-	l.Println("> ResulPlaintextModulus:")
-	decryptor := rlwe.NewDecryptor(params, tsk)
-	ptres := heint.NewPlaintext(params, params.MaxLevel())
-	elapsedDecParty := runTimed(func() {
-		decryptor.Decrypt(encOut, ptres)
-	})
+	decryptionBank(params, encOut, tsk, encoder)
+	/*
+		// Decrypt the result with the target secret key
+		l.Println("> ResulPlaintextModulus:")
+		decryptor := rlwe.NewDecryptor(params, tsk)
+		ptres := heint.NewPlaintext(params, params.MaxLevel())
+		elapsedDecParty := runTimed(func() {
+			decryptor.Decrypt(encOut, ptres)
+		})
 
-	// Check the result
-	res := make([]uint64, params.MaxSlots())
-	if err := encoder.Decode(ptres, res); err != nil {
-		panic(err)
-	}
+		// Check the result
+		res := make([]uint64, params.MaxSlots())
+		if err := encoder.Decode(ptres, res); err != nil {
+			panic(err)
+		}*/
 }
 
-func encPhase(params heint.Parameters, pk *rlwe.PublicKey, encoder *heint.Encoder, input []uint64) (encInputs []*rlwe.Ciphertext) {
+func setParamAndKeyBank(params heint.Parameters, pk *rlwe.PublicKey, sk *rlwe.SecretKey, tsk *rlwe.SecretKey) (params heint.Parameters, pk *rlwe.PublicKey, sk *rlwe.SecretKey, tsk *rlwe.SecretKey) {
+	return params, pk, sk, tsk
+}
+
+func sendInputBank(encInputs []*rlwe.Ciphertext) (inputBank []*rlwe.Ciphertext) {
+	inputBank = encInputs
+	return
+}
+
+func getEncOutBank(out *rlwe.Ciphertext) (EncOut *rlwe.Ciphertext) {
+	EncOut = out
+	return
+}
+
+func encPhaseBank(params heint.Parameters, pk *rlwe.PublicKey, encoder *heint.Encoder, input []uint64) (encInputs []*rlwe.Ciphertext) {
 
 	l := log.New(os.Stderr, "", 0)
 
@@ -59,16 +75,16 @@ func encPhase(params heint.Parameters, pk *rlwe.PublicKey, encoder *heint.Encode
 	encryptor := rlwe.NewEncryptor(params, pk)
 
 	pt := heint.NewPlaintext(params, params.MaxLevel())
-	elapsedEncryptParty = runTimedParty(func() {
-		//for i, pi := range P {
-		if err := encoder.Encode(input, pt); err != nil {
-			panic(err)
-		}
-		if err := encryptor.Encrypt(pt, encInputs); err != nil {
-			panic(err)
-		}
-		//}
-	})
+	//elapsedEncryptParty = runTimedParty(func() {
+	//for i, pi := range P {
+	if err := encoder.Encode(input, pt); err != nil {
+		panic(err)
+	}
+	if err := encryptor.Encrypt(pt, encInputs); err != nil {
+		panic(err)
+	}
+	//}
+	//})
 
 	elapsedEncryptCloud = time.Duration(0)
 	l.Printf("\tdone (cloud: %s, party: %s)\n", elapsedEncryptCloud, elapsedEncryptParty)
@@ -76,11 +92,24 @@ func encPhase(params heint.Parameters, pk *rlwe.PublicKey, encoder *heint.Encode
 	return
 }
 
-func setInput(params heint.Parameters, a int) (expRes []uint64) {
+func setInputBank(params heint.Parameters, a int) (expRes []uint64) {
 	expRes = make([]uint64, params.N())
 	for i := range expRes {
 		expRes[i] = 0
 	}
-	expRes[len(expRes)-1] = a
+	expRes[len(expRes)-1] = uint64(a)
+	return
+}
+
+func decryptionBank(params heint.Parameters, encOut *rlwe.Ciphertext, tsk *rlwe.SecretKey, encoder *heint.Encoder) (res []uint64) {
+	decryptor := rlwe.NewDecryptor(params, tsk)
+	ptres := heint.NewPlaintext(params, params.MaxLevel())
+	elapsedDecParty := runTimed(func() {
+		decryptor.Decrypt(encOut, ptres)
+	})
+	res = make([]uint64, params.MaxSlots())
+	if err := encoder.Decode(ptres, res); err != nil {
+		panic(err)
+	}
 	return
 }

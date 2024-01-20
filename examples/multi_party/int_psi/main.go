@@ -120,12 +120,18 @@ func main() {
 	pk := ckgphase(params, crs, P)
 
 	//return parameters and key
-	//ALTRO DUBBIO, COME DO LA CHIAVE AI DATA HOLDER? PERCHE SENNO GLI DO LA POSSIBILITA DI DECIFRARE TUTTO
-	for _, pi := range P {
-		sendKeyAndParam(params, pk, pi)
-	}
+	//suppose the first party is the bank
+	sendKeyAndParamBank(params, pk, P[0], tsk)
+
+	//suppose the second party is the user
+	sendKeyAndParamUser(params, P[1], tsk)
+
+	//send the key to encrypt to the dataholders
+	sendKeyAndParamDH(params, pk)
 
 	//get inputs already encrypted
+	getEncInputBank()
+	getEncInputDH()
 
 	// 2) Collective relinearization key generation
 	rlk := rkgphase(params, crs, P)
@@ -139,7 +145,7 @@ func main() {
 
 	//encInputs := encPhase(params, P, pk, encoder)
 	encRes := make([]*rlwe.Ciphertext, len(P[0].ciphertext))
-	for i := 0; i < len(P[0].ciphertext); i++ {
+	for i := 0; i < min(len(P[0].ciphertext), len(P[1].ciphertext)); i++ {
 		encInputs := make([]*rlwe.Ciphertext, len(P))
 		encInputs[0] = P[0].ciphertext[i]
 		encInputs[1] = P[1].ciphertext[i]
@@ -155,24 +161,28 @@ func main() {
 		encInputs[0] = result
 		encInputs[1] = encRes[i+1]
 		result = evalPhaseAdd(params, NGoRoutine, encInputs, evk)
-
 	}
 
 	encOut := pcksPhase(params, tpk, result, P)
 
-	// Decrypt the result with the target secret key
-	l.Println("> ResulPlaintextModulus:")
-	decryptor := rlwe.NewDecryptor(params, tsk)
-	ptres := heint.NewPlaintext(params, params.MaxLevel())
-	elapsedDecParty := runTimed(func() {
-		decryptor.Decrypt(encOut, ptres)
-	})
+	//send back result
+	sendResult(encOut)
 
-	// Check the result
-	res := make([]uint64, params.MaxSlots())
-	if err := encoder.Decode(ptres, res); err != nil {
-		panic(err)
-	}
+	/*
+		// Decrypt the result with the target secret key
+		l.Println("> ResulPlaintextModulus:")
+		decryptor := rlwe.NewDecryptor(params, tsk)
+		ptres := heint.NewPlaintext(params, params.MaxLevel())
+		elapsedDecParty := runTimed(func() {
+			decryptor.Decrypt(encOut, ptres)
+		})
+
+		// Check the result
+		res := make([]uint64, params.MaxSlots())
+		if err := encoder.Decode(ptres, res); err != nil {
+			panic(err)
+		}
+	*/
 	/*l.Printf("\t%v\n", res[:16])
 	for i := range expRes {
 		if expRes[i] != res[i] {
@@ -188,13 +198,44 @@ func main() {
 
 }
 
-func sendKeyAndParam(param heint.Parameters, pk *rlwe.PublicKey, P *party) (parameters heint.Parameters, pubCollectiveKey *rlwe.PublicKey, secretKey *rlwe.SecretKey) {
+func sendKeyAndParamBank(param heint.Parameters, pk *rlwe.PublicKey, P *party, tsk *rlwe.SecretKey) (parameters heint.Parameters, pubCollectiveKey *rlwe.PublicKey, secretKey *rlwe.SecretKey, decKey *rlwe.SecretKey) {
 	parameters = param
 	pubCollectiveKey = pk
 	secretKey = P.sk
+	decKey = tsk
 	return
 }
 
+func getEncInputBank(ciphertext []*rlwe.Ciphertext, P []*party) {
+	P[0].ciphertext = ciphertext
+	return
+}
+
+func getEncInputDH(a *rlwe.Ciphertext, P []*party) {
+	P[1].ciphertext = append(P[1].ciphertext, a)
+	return
+}
+
+func sendKeyAndParamUser(param heint.Parameters, P *party, tsk *rlwe.SecretKey) (parameters heint.Parameters, secretKey *rlwe.SecretKey, decKey *rlwe.SecretKey) {
+	//he doesn't need the key to encrypt
+	parameters = param
+	secretKey = P.sk
+	decKey = tsk
+	return
+}
+
+func sendKeyAndParamDH(param heint.Parameters, pk *rlwe.PublicKey) (parameters heint.Parameters, pubCollectiveKey *rlwe.PublicKey) {
+	parameters = param
+	pubCollectiveKey = pk
+	return
+}
+
+func sendResult(encOut *rlwe.Ciphertext) (res *rlwe.Ciphertext) {
+	res = encOut
+	return
+}
+
+/*
 func encPhase(params heint.Parameters, P []*party, pk *rlwe.PublicKey, encoder *heint.Encoder) (encInputs []*rlwe.Ciphertext) {
 
 	l := log.New(os.Stderr, "", 0)
@@ -225,6 +266,7 @@ func encPhase(params heint.Parameters, P []*party, pk *rlwe.PublicKey, encoder *
 
 	return
 }
+*/
 
 func evalPhaseAdd(params heint.Parameters, NGoRoutine int, encInputs []*rlwe.Ciphertext, evk rlwe.EvaluationKeySet) (encRes *rlwe.Ciphertext) {
 
