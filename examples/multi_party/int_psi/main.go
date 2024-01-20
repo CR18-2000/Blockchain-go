@@ -154,9 +154,9 @@ func main() {
 	//encRes := evalPhaseAdd(params, NGoRoutine, encInputs, evk)
 
 	encInputs := make([]*rlwe.Ciphertext, len(P))
-	result := evalPhaseAdd(params, NGoRoutine, encInputs, evk)
 	encInputs[0] = encRes[0]
 	encInputs[1] = encRes[1]
+	result := evalPhaseAdd(params, NGoRoutine, encInputs, evk)
 	for i := 1; i < len(encRes)-1; i++ {
 		encInputs[0] = result
 		encInputs[1] = encRes[i+1]
