@@ -41,7 +41,9 @@ type party struct {
 	rkgShareTwo mhe.RelinearizationKeyGenShare
 	pcksShare   mhe.PublicKeySwitchShare
 
-	input []uint64
+	ciphertext []*rlwe.Ciphertext
+
+	//input []uint64
 }
 type multTask struct {
 	wg              *sync.WaitGroup
@@ -74,7 +76,7 @@ func main() {
 	// arg2: number of Go routines
 
 	// Largest for n=8192: 512 parties
-	N := 8 // Default number of parties
+	N := 2 // Default number of parties
 	var err error
 	if len(os.Args[1:]) >= 1 {
 		N, err = strconv.Atoi(os.Args[1])
@@ -112,10 +114,18 @@ func main() {
 	P := genparties(params, N)
 
 	// Inputs & expected result
-	expRes := genInputs(params, P)
+	//expRes := genInputs(params, P)
 
 	// 1) Collective public key generation
 	pk := ckgphase(params, crs, P)
+
+	//return parameters and key
+	//ALTRO DUBBIO, COME DO LA CHIAVE AI DATA HOLDER? PERCHE SENNO GLI DO LA POSSIBILITA DI DECIFRARE TUTTO
+	for _, pi := range P {
+		sendKeyAndParam(params, pk, pi)
+	}
+
+	//get inputs already encrypted
 
 	// 2) Collective relinearization key generation
 	rlk := rkgphase(params, crs, P)
@@ -127,11 +137,28 @@ func main() {
 	l.Printf("\tSetup done (cloud: %s, party: %s)\n",
 		elapsedRKGCloud+elapsedCKGCloud, elapsedRKGParty+elapsedCKGParty)
 
-	encInputs := encPhase(params, P, pk, encoder)
+	//encInputs := encPhase(params, P, pk, encoder)
+	encRes := make([]*rlwe.Ciphertext, len(P[0].ciphertext))
+	for i := 0; i < len(P[0].ciphertext); i++ {
+		encInputs := make([]*rlwe.Ciphertext, len(P))
+		encInputs[0] = P[0].ciphertext[i]
+		encInputs[1] = P[1].ciphertext[i]
+		encRes[i] = evalPhaseMul(params, NGoRoutine, encInputs, evk)
+	}
+	//encRes := evalPhaseAdd(params, NGoRoutine, encInputs, evk)
 
-	encRes := evalPhase(params, NGoRoutine, encInputs, evk)
+	encInputs := make([]*rlwe.Ciphertext, len(P))
+	result := evalPhaseAdd(params, NGoRoutine, encInputs, evk)
+	encInputs[0] = encRes[0]
+	encInputs[1] = encRes[1]
+	for i := 1; i < len(encRes)-1; i++ {
+		encInputs[0] = result
+		encInputs[1] = encRes[i+1]
+		result = evalPhaseAdd(params, NGoRoutine, encInputs, evk)
 
-	encOut := pcksPhase(params, tpk, encRes, P)
+	}
+
+	encOut := pcksPhase(params, tpk, result, P)
 
 	// Decrypt the result with the target secret key
 	l.Println("> ResulPlaintextModulus:")
@@ -146,7 +173,7 @@ func main() {
 	if err := encoder.Decode(ptres, res); err != nil {
 		panic(err)
 	}
-	l.Printf("\t%v\n", res[:16])
+	/*l.Printf("\t%v\n", res[:16])
 	for i := range expRes {
 		if expRes[i] != res[i] {
 			//l.Printf("\t%v\n", expRes)
@@ -154,11 +181,18 @@ func main() {
 			return
 		}
 	}
-	l.Println("\tcorrect")
+	l.Println("\tcorrect")*/
 	l.Printf("> Finished (total cloud: %s, total party: %s)\n",
 		elapsedCKGCloud+elapsedRKGCloud+elapsedEncryptCloud+elapsedEvalCloud+elapsedPCKSCloud,
 		elapsedCKGParty+elapsedRKGParty+elapsedEncryptParty+elapsedEvalParty+elapsedPCKSParty+elapsedDecParty)
 
+}
+
+func sendKeyAndParam(param heint.Parameters, pk *rlwe.PublicKey, P *party) (parameters heint.Parameters, pubCollectiveKey *rlwe.PublicKey, secretKey *rlwe.SecretKey) {
+	parameters = param
+	pubCollectiveKey = pk
+	secretKey = P.sk
+	return
 }
 
 func encPhase(params heint.Parameters, P []*party, pk *rlwe.PublicKey, encoder *heint.Encoder) (encInputs []*rlwe.Ciphertext) {
@@ -192,7 +226,82 @@ func encPhase(params heint.Parameters, P []*party, pk *rlwe.PublicKey, encoder *
 	return
 }
 
-func evalPhase(params heint.Parameters, NGoRoutine int, encInputs []*rlwe.Ciphertext, evk rlwe.EvaluationKeySet) (encRes *rlwe.Ciphertext) {
+func evalPhaseAdd(params heint.Parameters, NGoRoutine int, encInputs []*rlwe.Ciphertext, evk rlwe.EvaluationKeySet) (encRes *rlwe.Ciphertext) {
+
+	l := log.New(os.Stderr, "", 0)
+
+	encLvls := make([][]*rlwe.Ciphertext, 0)
+	encLvls = append(encLvls, encInputs)
+	for nLvl := len(encInputs) / 2; nLvl > 0; nLvl = nLvl >> 1 {
+		encLvl := make([]*rlwe.Ciphertext, nLvl)
+		for i := range encLvl {
+			encLvl[i] = heint.NewCiphertext(params, 2, params.MaxLevel())
+		}
+		encLvls = append(encLvls, encLvl)
+	}
+	encRes = encLvls[len(encLvls)-1][0]
+
+	evaluator := heint.NewEvaluator(params, evk)
+	// Split the task among the Go routines
+	tasks := make(chan *multTask)
+	workers := &sync.WaitGroup{}
+	workers.Add(NGoRoutine)
+	//l.Println("> Spawning", NGoRoutine, "evaluator goroutine")
+	for i := 1; i <= NGoRoutine; i++ {
+		go func(i int) {
+			evaluator := evaluator.ShallowCopy() // creates a shallow evaluator copy for this goroutine
+			for task := range tasks {
+				task.elapsedmultTask = runTimed(func() {
+					// 1) Multiplication of two input vectors
+					if err := evaluator.Add(task.op1, task.opOut, task.res); err != nil {
+						panic(err)
+					}
+					// 2) Relinearization
+					if err := evaluator.Relinearize(task.res, task.res); err != nil {
+						panic(err)
+					}
+				})
+				task.wg.Done()
+			}
+			//l.Println("\t evaluator", i, "down")
+			workers.Done()
+		}(i)
+		//l.Println("\t evaluator", i, "started")
+	}
+
+	// Start the tasks
+	taskList := make([]*multTask, 0)
+	l.Println("> Eval Phase")
+	elapsedEvalCloud = runTimed(func() {
+		for i, lvl := range encLvls[:len(encLvls)-1] {
+			nextLvl := encLvls[i+1]
+			l.Println("\tlevel", i, len(lvl), "->", len(nextLvl))
+			wg := &sync.WaitGroup{}
+			wg.Add(len(nextLvl))
+			for j, nextLvlCt := range nextLvl {
+				task := multTask{wg, lvl[2*j], lvl[2*j+1], nextLvlCt, 0}
+				taskList = append(taskList, &task)
+				tasks <- &task
+			}
+			wg.Wait()
+		}
+	})
+	elapsedEvalCloudCPU = time.Duration(0)
+	for _, t := range taskList {
+		elapsedEvalCloudCPU += t.elapsedmultTask
+	}
+	elapsedEvalParty = time.Duration(0)
+	l.Printf("\tdone (cloud: %s (wall: %s), party: %s)\n",
+		elapsedEvalCloudCPU, elapsedEvalCloud, elapsedEvalParty)
+
+	//l.Println("> Shutting down workers")
+	close(tasks)
+	workers.Wait()
+
+	return
+}
+
+func evalPhaseMul(params heint.Parameters, NGoRoutine int, encInputs []*rlwe.Ciphertext, evk rlwe.EvaluationKeySet) (encRes *rlwe.Ciphertext) {
 
 	l := log.New(os.Stderr, "", 0)
 
