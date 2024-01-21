@@ -122,10 +122,10 @@ func main() {
 
 	//return parameters and key
 	//suppose the first party is the bank
-	sendKeyAndParamBank(params, pk, P[0], tsk)
+	sendKeyAndParamBank(params, pk, P[0])
 
 	//suppose the second party is the user
-	sendKeyAndParamUser(params, P[1], tsk)
+	sendKeyAndParamUser(params, P[1])
 
 	//send the key to encrypt to the dataholders
 	sendKeyAndParamDH(params, pk)
