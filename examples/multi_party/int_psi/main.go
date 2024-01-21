@@ -146,7 +146,7 @@ func main() {
 
 	//encInputs := encPhase(params, P, pk, encoder)
 	encRes := make([]*rlwe.Ciphertext, len(P[0].ciphertext))
-	for i := 0; i < min(len(P[0].ciphertext), len(P[1].ciphertext)); i++ {
+	for i := 0; i < len(P[0].ciphertext); i++ {
 		encInputs := make([]*rlwe.Ciphertext, len(P))
 		encInputs[0] = P[0].ciphertext[i]
 		encInputs[1] = P[1].ciphertext[i]

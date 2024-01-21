@@ -46,15 +46,16 @@ func getEncOutUser(out *rlwe.Ciphertext) (EncOut *rlwe.Ciphertext) {
 	return
 }
 
-func decryptionUser(params heint.Parameters, encOut *rlwe.Ciphertext, tsk *rlwe.SecretKey, encoder *heint.Encoder) (res []uint64) {
+func decryptionUser(params heint.Parameters, encOut *rlwe.Ciphertext, tsk *rlwe.SecretKey, encoder *heint.Encoder) (a int) {
 	decryptor := rlwe.NewDecryptor(params, tsk)
 	ptres := heint.NewPlaintext(params, params.MaxLevel())
 	elapsedDecParty := runTimed(func() {
 		decryptor.Decrypt(encOut, ptres)
 	})
-	res = make([]uint64, params.MaxSlots())
+	res := make([]uint64, params.MaxSlots())
 	if err := encoder.Decode(ptres, res); err != nil {
 		panic(err)
 	}
+	a = int(res[len(res)-1])
 	return
 }
