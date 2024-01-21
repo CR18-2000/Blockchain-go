@@ -34,6 +34,7 @@ func runTimedParty(f func(), N int) time.Duration {
 
 type party struct {
 	sk         *rlwe.SecretKey
+	pk         *rlwe.PublicKey
 	rlkEphemSk *rlwe.SecretKey
 
 	ckgShare    mhe.PublicKeyGenShare
@@ -105,10 +106,10 @@ func main() {
 		panic(err)
 	}
 
-	encoder := heint.NewEncoder(params)
+	//encoder := heint.NewEncoder(params)
 
 	// Target private and public keys
-	tsk, tpk := rlwe.NewKeyGenerator(params).GenKeyPairNew()
+	//tsk, tpk := rlwe.NewKeyGenerator(params).GenKeyPairNew()
 
 	// Create each party, and allocate the memory for all the shares that the protocols will need
 	P := genparties(params, N)
@@ -163,10 +164,15 @@ func main() {
 		result = evalPhaseAdd(params, NGoRoutine, encInputs, evk)
 	}
 
-	encOut := pcksPhase(params, tpk, result, P)
+	encOutBank := pcksPhase(params, P[0].pk, result, P)
 
-	//send back result
-	sendResult(encOut)
+	//send back result to bank (ATTENZIONE, STIAMO ASSUMENDO PARTE 0 SIA BANCA)
+	sendResultToBank(encOutBank)
+
+	encOutUser := pcksPhase(params, P[1].pk, result, P)
+
+	//send back result to bank (ATTENZIONE, STIAMO ASSUMENDO PARTE 0 SIA BANCA)
+	sendResultToUser(encOutUser)
 
 	/*
 		// Decrypt the result with the target secret key
@@ -198,11 +204,10 @@ func main() {
 
 }
 
-func sendKeyAndParamBank(param heint.Parameters, pk *rlwe.PublicKey, P *party, tsk *rlwe.SecretKey) (parameters heint.Parameters, pubCollectiveKey *rlwe.PublicKey, secretKey *rlwe.SecretKey, decKey *rlwe.SecretKey) {
+func sendKeyAndParamBank(param heint.Parameters, pk *rlwe.PublicKey, P *party) (parameters heint.Parameters, pubCollectiveKey *rlwe.PublicKey, secretKey *rlwe.SecretKey) {
 	parameters = param
 	pubCollectiveKey = pk
 	secretKey = P.sk
-	decKey = tsk
 	return
 }
 
@@ -216,11 +221,10 @@ func getEncInputDH(a *rlwe.Ciphertext, P []*party) {
 	return
 }
 
-func sendKeyAndParamUser(param heint.Parameters, P *party, tsk *rlwe.SecretKey) (parameters heint.Parameters, secretKey *rlwe.SecretKey, decKey *rlwe.SecretKey) {
+func sendKeyAndParamUser(param heint.Parameters, P *party) (parameters heint.Parameters, secretKey *rlwe.SecretKey) {
 	//he doesn't need the key to encrypt
 	parameters = param
 	secretKey = P.sk
-	decKey = tsk
 	return
 }
 
@@ -230,7 +234,12 @@ func sendKeyAndParamDH(param heint.Parameters, pk *rlwe.PublicKey) (parameters h
 	return
 }
 
-func sendResult(encOut *rlwe.Ciphertext) (res *rlwe.Ciphertext) {
+func sendResultToBank(encOut *rlwe.Ciphertext) (res *rlwe.Ciphertext) {
+	res = encOut
+	return
+}
+
+func sendResultToUser(encOut *rlwe.Ciphertext) (res *rlwe.Ciphertext) {
 	res = encOut
 	return
 }
@@ -424,8 +433,7 @@ func genparties(params heint.Parameters, N int) []*party {
 	P := make([]*party, N)
 	for i := range P {
 		pi := &party{}
-		pi.sk = rlwe.NewKeyGenerator(params).GenSecretKeyNew()
-
+		pi.sk, pi.pk = rlwe.NewKeyGenerator(params).GenKeyPairNew()
 		P[i] = pi
 	}
 

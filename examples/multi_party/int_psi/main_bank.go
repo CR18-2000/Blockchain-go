@@ -13,7 +13,7 @@ func main_bank() {
 	l := log.New(os.Stderr, "", 0)
 
 	//set parameters
-	params, pk, sk, tsk := setParamAndKeyBank()
+	params, pk, sk := setParamAndKeyBank()
 
 	//get inputs
 	input := setInputBank(params, a)
@@ -29,7 +29,7 @@ func main_bank() {
 	encOut = getEncOutBank()
 
 	//decrypt
-	decryptionBank(params, encOut, tsk, encoder)
+	decryptionBank(params, encOut, sk, encoder)
 	/*
 		// Decrypt the result with the target secret key
 		l.Println("> ResulPlaintextModulus:")
@@ -46,8 +46,8 @@ func main_bank() {
 		}*/
 }
 
-func setParamAndKeyBank(params heint.Parameters, pk *rlwe.PublicKey, sk *rlwe.SecretKey, tsk *rlwe.SecretKey) (params heint.Parameters, pk *rlwe.PublicKey, sk *rlwe.SecretKey, tsk *rlwe.SecretKey) {
-	return params, pk, sk, tsk
+func setParamAndKeyBank(params heint.Parameters, pk *rlwe.PublicKey, sk *rlwe.SecretKey) (params heint.Parameters, pk *rlwe.PublicKey, sk *rlwe.SecretKey) {
+	return params, pk, sk
 }
 
 func sendInputBank(encInputs []*rlwe.Ciphertext) (inputBank []*rlwe.Ciphertext) {

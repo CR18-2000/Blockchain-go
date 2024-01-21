@@ -12,13 +12,15 @@ func main_user() {
 	l := log.New(os.Stderr, "", 0)
 
 	//set parameters
-	params, sk, tsk := setParamAndKeyUser()
+	params, sk := setParamAndKeyUser()
 
 	//obtain back the result of evaluation
 	encOut = getEncOutUser()
 
+	encoder := heint.NewEncoder(params)
+
 	//decrypt
-	decryptionUser(params, encOut, tsk, encoder)
+	decryptionUser(params, encOut, sk, encoder)
 	/*
 		// Decrypt the result with the target secret key
 		l.Println("> ResulPlaintextModulus:")
@@ -35,8 +37,8 @@ func main_user() {
 		}*/
 }
 
-func setParamAndKeyUser(params heint.Parameters, sk *rlwe.SecretKey, tsk *rlwe.SecretKey) (params heint.Parameters, pk *rlwe.PublicKey, sk *rlwe.SecretKey, tsk *rlwe.SecretKey) {
-	return params, sk, tsk
+func setParamAndKeyUser(params heint.Parameters, sk *rlwe.SecretKey) (params heint.Parameters, pk *rlwe.PublicKey, sk *rlwe.SecretKey) {
+	return params, sk
 }
 
 func getEncOutUser(out *rlwe.Ciphertext) (EncOut *rlwe.Ciphertext) {
