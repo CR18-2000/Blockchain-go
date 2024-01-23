@@ -38,6 +38,37 @@ type GenerateHMMKeysEventData struct {
 	Addresses []string
 }
 
+func check(err error) {
+	if err != nil {
+		panic(err)
+	}
+}
+
+func runTimed(f func()) time.Duration {
+	start := time.Now()
+	f()
+	return time.Since(start)
+}
+
+func runTimedParty(f func(), N int) time.Duration {
+	start := time.Now()
+	f()
+	return time.Duration(time.Since(start).Nanoseconds() / int64(N))
+}
+
+type party struct {
+	sk         *rlwe.SecretKey
+	pk         *rlwe.PublicKey
+	rlkEphemSk *rlwe.SecretKey
+
+	ckgShare    mhe.PublicKeyGenShare
+	rkgShareOne mhe.RelinearizationKeyGenShare
+	rkgShareTwo mhe.RelinearizationKeyGenShare
+	pcksShare   mhe.PublicKeySwitchShare
+
+	input [][]uint64
+}
+
 func TEE(quitChan chan struct{}, wg *sync.WaitGroup, contracts map[string]myContract) {
 
 	logger := log.New(os.Stderr, "[TEE] ", 0)
