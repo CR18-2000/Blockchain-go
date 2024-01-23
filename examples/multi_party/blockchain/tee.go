@@ -8,7 +8,6 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"time"
 
 	"github.com/DmitriyVTitov/size"
 	"github.com/ethereum/go-ethereum"
@@ -16,57 +15,12 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethclient"
-	"github.com/tuneinsight/lattigo/v5/core/rlwe"
 	"github.com/tuneinsight/lattigo/v5/he/heint"
-	"github.com/tuneinsight/lattigo/v5/mhe"
 	"github.com/tuneinsight/lattigo/v5/utils/sampling"
 )
 
-var elapsedEncryptParty time.Duration
-var elapsedEncryptCloud time.Duration
-var elapsedCKGCloud time.Duration
-var elapsedCKGParty time.Duration
-var elapsedRKGCloud time.Duration
-var elapsedRKGParty time.Duration
-var elapsedPCKSCloud time.Duration
-var elapsedPCKSParty time.Duration
-var elapsedEvalCloudCPU time.Duration
-var elapsedEvalCloud time.Duration
-var elapsedEvalParty time.Duration
-
 type GenerateHMMKeysEventData struct {
 	Addresses []string
-}
-
-func check(err error) {
-	if err != nil {
-		panic(err)
-	}
-}
-
-func runTimed(f func()) time.Duration {
-	start := time.Now()
-	f()
-	return time.Since(start)
-}
-
-func runTimedParty(f func(), N int) time.Duration {
-	start := time.Now()
-	f()
-	return time.Duration(time.Since(start).Nanoseconds() / int64(N))
-}
-
-type party struct {
-	sk         *rlwe.SecretKey
-	pk         *rlwe.PublicKey
-	rlkEphemSk *rlwe.SecretKey
-
-	ckgShare    mhe.PublicKeyGenShare
-	rkgShareOne mhe.RelinearizationKeyGenShare
-	rkgShareTwo mhe.RelinearizationKeyGenShare
-	pcksShare   mhe.PublicKeySwitchShare
-
-	input [][]uint64
 }
 
 func TEE(quitChan chan struct{}, wg *sync.WaitGroup, contracts map[string]myContract) {
@@ -183,52 +137,4 @@ func TEE(quitChan chan struct{}, wg *sync.WaitGroup, contracts map[string]myCont
 		}
 	}
 
-}
-
-func genparties(params heint.Parameters, N int) []*party {
-
-	// Create each party, and allocate the memory for all the shares that the protocols will need
-	P := make([]*party, N)
-	for i := range P {
-		pi := &party{}
-		pi.sk, pi.pk = rlwe.NewKeyGenerator(params).GenKeyPairNew()
-		P[i] = pi
-	}
-
-	return P
-}
-
-func ckgphase(params heint.Parameters, crs sampling.PRNG, P []*party) *rlwe.PublicKey {
-
-	l := log.New(os.Stderr, "[TEE]", 0)
-
-	l.Println("> PublicKeyGen Phase")
-
-	ckg := mhe.NewPublicKeyGenProtocol(params) // Public key generation
-	ckgCombined := ckg.AllocateShare()
-	for _, pi := range P {
-		pi.ckgShare = ckg.AllocateShare()
-	}
-
-	crp := ckg.SampleCRP(crs)
-
-	elapsedCKGParty = runTimedParty(func() {
-		for _, pi := range P {
-			/* #nosec G601 -- Implicit memory aliasing in for loop acknowledged */
-			ckg.GenShare(pi.sk, crp, &pi.ckgShare)
-		}
-	}, len(P))
-
-	pk := rlwe.NewPublicKey(params)
-
-	elapsedCKGCloud = runTimed(func() {
-		for _, pi := range P {
-			ckg.AggregateShares(pi.ckgShare, ckgCombined, &ckgCombined)
-		}
-		ckg.GenPublicKey(ckgCombined, crp, pk)
-	})
-
-	l.Printf("\tdone (cloud: %s, party: %s)\n", elapsedCKGCloud, elapsedCKGParty)
-
-	return pk
 }
