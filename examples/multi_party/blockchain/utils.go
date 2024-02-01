@@ -36,15 +36,15 @@ const (
 	InfuraWSS = "wss://sepolia.infura.io/ws/v3/45caed101fc844fd9339247c4358fc4c"
 	//InfuraWSS = "ws://localhost:8545"
 	// PK for account with test ether
-	TestNetPK = "0xD25C8317a2876bf05b1141341516e60dE45308e8"
-	TestNetSK = "e0f2611bb5ef78f3a5abf1185541cc17e96455ccc7efc57a66a0718e940bec78"
+	TestNetPK = "0x57c13b160ac131B0c38Be43Fd3c871a3D3E1248f"
+	TestNetSK = "c4c834f65a9d3be8ac408da83f9c83d96fd6107f40ce8efa780ac8db9bb281c6"
 
-	TestNetPKLocal  = "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266"
-	TestNetSKLocal  = "ac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80"
+	TestNetPKLocal  = "0x57c13b160ac131B0c38Be43Fd3c871a3D3E1248f"
+	TestNetSKLocal  = "c4c834f65a9d3be8ac408da83f9c83d96fd6107f40ce8efa780ac8db9bb281c6"
 	etherscanAPIKey = "RQ2CIT1QDYVCRA7SVU1UDJKDK64JZ8FDBU"
 
 	// Etherscan API base URL
-	etherscanAPIBaseURL = "https://api-sepolia.etherscan.io/api"
+	etherscanAPIBaseURL = "http://api-sepolia.etherscan.io/api"
 	sepoliaChainID      = 11155111
 	hardhatChainID      = 31337
 )
@@ -57,6 +57,12 @@ type ContractABI struct {
 
 type ContractABI2 struct {
 	ABI json.RawMessage `json:"abi"`
+}
+
+type myContract struct {
+	name    string
+	address common.Address
+	abi     string
 }
 
 func GetContractABIlocal(contractName string) (string, error) {
@@ -175,8 +181,15 @@ func callSCMethod(contract myContract, loggerString string, method string, args 
 	if err != nil {
 		logger.Fatal(err)
 	}
+	//wait for the transaction to be mined
+	receipt, err := bind.WaitMined(context.Background(), client, signedTx)
+	if err != nil {
+		logger.Fatal(err)
+	}
 
-	logger.Printf("tx sent: %s", signedTx.Hash().Hex())
+	//get the transaction receipt
+	logger.Printf("tx sent: %s", receipt.TxHash.Hex())
+
 	//call the function on the samrt contract to upload the requirements
 	return nil, nil
 }

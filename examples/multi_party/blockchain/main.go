@@ -16,12 +16,6 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 )
 
-type myContract struct {
-	name    string
-	abi     string
-	address common.Address
-}
-
 func main() {
 	//clear screen
 	exec.Command("clear")
@@ -36,9 +30,9 @@ func main() {
 	l.Println("  Blockchain project demo --- Cereser Lorenzo/Regazzoni Cristina ")
 	l.Println()
 	l.Println()
-	//contracts, err := deployContracts()
-	l2.Println("[SC-Deployer] Starting contract deployment")
-	contracts, err := deployMockContracts()
+	contracts, err := deployContracts()
+	l2.Println("Starting contract deployment")
+	//contracts, err := deployMockContracts()
 	if err != nil {
 		l2.Fatalf("could not deploy contracts: %v", err)
 	}
@@ -111,15 +105,25 @@ func deployContracts() (map[string]myContract, error) {
 			address: common.HexToAddress(_address),
 		}
 	}
+
+	log.Println("Contracts deployed successfully.")
+
 	callSCMethod(contracts["CSC"], "[SC-Deployer][CSC] ", "changeBankAddress", contracts["BankSC"].address)
+	log.Println("BankSC address set in CSC")
 	callSCMethod(contracts["CSC"], "[SC-Deployer][CSC] ", "changeAddressAuthAddress", contracts["AddressAuth"].address)
+	log.Println("AddressAuth address set in CSC")
 	callSCMethod(contracts["CSC"], "[SC-Deployer][CSC] ", "changeDH1Address", contracts["DH1"].address)
+	log.Println("DH1 address set in CSC")
 	callSCMethod(contracts["CSC"], "[SC-Deployer][CSC] ", "changeDH2Address", contracts["DH2"].address)
+	log.Println("DH2 address set in CSC")
 	callSCMethod(contracts["CSC"], "[SC-Deployer][CSC] ", "changeDH3Address", contracts["DH3"].address)
+	log.Println("DH3 address set in CSC")
 
 	callSCMethod(contracts["BankSC"], "[SC-Deployer][BankSC] ", "changeCSCAddress", contracts["CSC"].address)
+	log.Println("CSC address set in BankSC")
 
 	callSCMethod(contracts["AddressAuth"], "[SC-Deployer][AddressAuth] ", "changeCSCAddress", contracts["CSC"].address)
+	log.Println("CSC address set in AddressAuth")
 
 	return contracts, nil
 }
